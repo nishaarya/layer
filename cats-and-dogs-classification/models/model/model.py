@@ -46,20 +46,6 @@ def train_model(train: Train, ds:Dataset("catsdogs"), pf: Featureset("cat_and_do
     train.register_input(X_train)
     train.register_output(df['category'])
 
-    # train_generator = ImageDataGenerator(rescale=1. / 255,
-    #                                    shear_range=0.2,
-    #                                    zoom_range=0.2,
-    #                                    horizontal_flip=True,
-    #                                    width_shift_range=0.1,
-    #                                    height_shift_range=0.1
-    #                                    )
-    # train_generator.fit(X_train)
-    # training_data = train_generator.flow(X_train, training_set['category'], batch_size=32)
-   
-    # valid_generator = ImageDataGenerator(rescale=1. / 255)
-    # testing_data = valid_generator.flow(X_test, testing_set['category'], batch_size=32)
-
-
     load_datagen = ImageDataGenerator(rescale=1./255,
                                     shear_range=0.2,
                                     zoom_range=0.2,
@@ -71,11 +57,10 @@ def train_model(train: Train, ds:Dataset("catsdogs"), pf: Featureset("cat_and_do
     training_data = load_datagen.flow(X_train, training_set['category'], batch_size=32)
     testing_data = load_datagen.flow(X_test, testing_set['category'], batch_size=32)
 
-
     # simple model
 
     model = models.Sequential()
-    model.add(layers.Conv2D(filters=32, kernel_size=(3, 3), activation='relu', input_shape=(224, 224, 3)))
+    model.add(layers.Conv2D(32, (3, 3), activation='relu', input_shape=(224, 224, 3)))
     model.add(layers.MaxPooling2D(2, 2))
     model.add(layers.Conv2D(32, (3, 3), activation='relu'))
     model.add(layers.Conv2D(128, (3, 3), activation='relu'))
@@ -97,9 +82,10 @@ def train_model(train: Train, ds:Dataset("catsdogs"), pf: Featureset("cat_and_do
         include_top=False, 
         input_shape=(150, 150, 3))
 
+    # freeze pre-trained model
     pretrained_model.trainable = False
 
-    # model 1
+    # model 1 run
 
     model = models.Sequential()
     model.add(layers.Dense(10, activation='relu'))
@@ -127,7 +113,6 @@ def train_model(train: Train, ds:Dataset("catsdogs"), pf: Featureset("cat_and_do
         optimizer='adam', 
         loss='binary_crossentropy', 
         metrics=['accuracy'])
-
 
     model.fit(
         training_data, 
