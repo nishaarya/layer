@@ -15,6 +15,10 @@ from tensorflow.keras.applications import Xception
 from tensorflow.keras import layers
 from tensorflow.keras import models
 from tensorflow.keras import optimizers
+import numpy as np
+import tensorflow as tf
+from tensorflow import keras
+import tensorflow_datasets as tfds
 
 
 def train_model(train: Train, ds:Dataset("catsdogs"), pf: Featureset("cat_and_dog_features")) -> Any:
@@ -46,6 +50,20 @@ def train_model(train: Train, ds:Dataset("catsdogs"), pf: Featureset("cat_and_do
     train.register_input(X_train)
     train.register_output(df['category'])
 
+    # train_generator = ImageDataGenerator(rescale=1. / 255,
+    #                                    shear_range=0.2,
+    #                                    zoom_range=0.2,
+    #                                    horizontal_flip=True,
+    #                                    width_shift_range=0.1,
+    #                                    height_shift_range=0.1
+    #                                    )
+    # train_generator.fit(X_train)
+    # training_data = train_generator.flow(X_train, training_set['category'], batch_size=32)
+   
+    # valid_generator = ImageDataGenerator(rescale=1. / 255)
+    # testing_data = valid_generator.flow(X_test, testing_set['category'], batch_size=32)
+
+
     load_datagen = ImageDataGenerator(rescale=1./255,
                                     shear_range=0.2,
                                     zoom_range=0.2,
@@ -57,105 +75,54 @@ def train_model(train: Train, ds:Dataset("catsdogs"), pf: Featureset("cat_and_do
     training_data = load_datagen.flow(X_train, training_set['category'], batch_size=32)
     testing_data = load_datagen.flow(X_test, testing_set['category'], batch_size=32)
 
-    # simple model
+    data_augmentation = keras.Sequential(
+        [layers.experimental.preprocessing.RandomFlip("horizontal"), layers.experimental.preprocessing.RandomRotation(0.1),]
+    )
 
-    model = models.Sequential()
-    model.add(layers.Conv2D(32, (3, 3), activation='relu', input_shape=(224, 224, 3)))
-    model.add(layers.MaxPooling2D(2, 2))
-    model.add(layers.Conv2D(32, (3, 3), activation='relu'))
-    model.add(layers.Conv2D(128, (3, 3), activation='relu'))
-    model.add(layers.MaxPooling2D(2, 2))
-    model.add(layers.Conv2D(64, (3, 3), activation='relu'))
-    model.add(layers.Flatten())
-    model.add(layers.Dense(10, activation='relu'))
-    model.add(layers.Dense(1, activation='sigmoid'))
+    base_model = keras.applications.Xception(
+    weights="imagenet",  # Load weights pre-trained on ImageNet.
+    input_shape=(150, 150, 3),
+    include_top=False,
+)  # Do not include the ImageNet classifier at the top.
 
-    model.compile(
-        loss='binary_crossentropy',
-        optimizer='adam',
-        metrics=['accuracy'])
-  
-  # pre-trained
+    # Freeze the base_model
+    base_model.trainable = False
 
-    pretrained_model = Xception(
-        weights='imagenet', 
-        include_top=False, 
-        input_shape=(150, 150, 3))
+    # Create new model on top
+    inputs = keras.Input(shape=(150, 150, 3))
+    x = data_augmentation(inputs)  # Apply random data augmentation
 
-    # freeze pre-trained model
-    pretrained_model.trainable = False
+    # Pre-trained Xception weights requires that input be scaled
+    scale_layer = keras.layers.Rescaling(scale=1 / 127.5, offset=-1)
+    x = scale_layer(x)
 
-    # model 1 run
-
-    model = models.Sequential()
-    model.add(layers.Dense(10, activation='relu'))
-    model.add(layers.Dense(10, activation='sigmoid'))
+    # Freeze the base model
+    x = base_model(x, training=False)
+    x = keras.layers.GlobalAveragePooling2D()(x)
+    x = keras.layers.Dropout(0.2)(x)  # Regularize with dropout
+    outputs = keras.layers.Dense(1)(x)
+    model = keras.Model(inputs, outputs)
 
     model.compile(
-        optimizer='adam', 
-        loss='binary_crossentropy', 
-        metrics=['accuracy'])
+    optimizer=keras.optimizers.Adam(),
+    loss=keras.losses.BinaryCrossentropy(from_logits=True),
+    metrics=[keras.metrics.BinaryAccuracy()],
+)
 
-    model.fit(
-        training_data, 
-        epochs=20, 
-        validation_data=testing_data)
+    epochs = 20
+    model.fit(training_data, epochs=epochs, validation_data=testing_data)
 
-    # Add dense layer
 
-    model = models.Sequential()
-    model.add(pretrained_model)
-    model.add(layers.Flatten())
-    model.add(layers.Dense(10, activation='relu'))
-    model.add(layers.Dense(10, activation='sigmoid'))
+    base_model.trainable = True
 
     model.compile(
-        optimizer='adam', 
-        loss='binary_crossentropy', 
-        metrics=['accuracy'])
+        optimizer=keras.optimizers.Adam(1e-5),  # Low learning rate
+        loss=keras.losses.BinaryCrossentropy(from_logits=True),
+        metrics=[keras.metrics.BinaryAccuracy()],
+)
 
-    model.fit(
-        training_data, 
-        epochs=20, 
-        validation_data=testing_data)
-
-    # fine tune
-
-    pretrained_model = Xception(
-        weights='imagenet', 
-        include_top=False, input_shape=(150, 150, 3))
-
-    pretrained_model.trainable = True
-   
-   # set_trainable = False
-
-    # for layer in pretrained_model.layers:
-    #     if layer == 'block14_sepconv1':
-    #         set_trainable = True
-            
-    #     if set_trainable:
-    #         layer.trainable = True
-    #     else:
-    #         layer.trainable = False
-
-    # train model again
-
-    model = models.Sequential()
-    model.add(pretrained_model)
-    model.add(layers.Flatten())
-    model.add(layers.Dense(10, activation='relu'))
-    model.add(layers.Dense(10, activation='sigmoid'))
-    model.compile(
-        optimizer='adam', 
-        loss='binary_crossentropy', 
-        metrics=['accuracy'])
-
-
-    model.fit(
-        training_data, 
-        epochs=10, 
-        validation_data=testing_data)
-
+    epochs = 10
+    model.fit(training_data, epochs=epochs, validation_data=testing_data)
 
     test_loss, test_accuracy = model.evaluate(testing_data)
     train_loss, train_accuracy = model.evaluate(training_data)
