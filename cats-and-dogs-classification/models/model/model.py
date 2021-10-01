@@ -50,6 +50,19 @@ def train_model(train: Train, ds:Dataset("catsdogs"), pf: Featureset("cat_and_do
     train.register_input(X_train)
     train.register_output(df['category'])
 
+    # train_generator = ImageDataGenerator(rescale=1. / 255,
+    #                                    shear_range=0.2,
+    #                                    zoom_range=0.2,
+    #                                    horizontal_flip=True,
+    #                                    width_shift_range=0.1,
+    #                                    height_shift_range=0.1
+    #                                    )
+    # train_generator.fit(X_train)
+    # training_data = train_generator.flow(X_train, training_set['category'], batch_size=32)
+   
+    # valid_generator = ImageDataGenerator(rescale=1. / 255)
+    # testing_data = valid_generator.flow(X_test, testing_set['category'], batch_size=32)
+
 
     load_datagen = ImageDataGenerator(rescale=1./255,
                                     shear_range=0.2,
@@ -62,13 +75,10 @@ def train_model(train: Train, ds:Dataset("catsdogs"), pf: Featureset("cat_and_do
     training_data = load_datagen.flow(X_train, training_set['category'], batch_size=32)
     testing_data = load_datagen.flow(X_test, testing_set['category'], batch_size=32)
 
-    
-    # Data augmentation
     data_augmentation = keras.Sequential(
         [layers.experimental.preprocessing.RandomFlip("horizontal"), layers.experimental.preprocessing.RandomRotation(0.1),]
     )
 
-    # Base model
     base_model = keras.applications.Xception(
     weights="imagenet",  # Load weights pre-trained on ImageNet.
     input_shape=(150, 150, 3),
@@ -103,7 +113,6 @@ def train_model(train: Train, ds:Dataset("catsdogs"), pf: Featureset("cat_and_do
     model.fit(training_data, epochs=epochs, validation_data=testing_data)
 
 
-    # Fine tune
     base_model.trainable = True
 
     model.compile(
